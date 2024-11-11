@@ -7,21 +7,19 @@ import { Post } from './entity/Post';
 const app = express();
 app.use(express.json());
 
+// Configuração da conexão com o banco de dados usando TypeORM
 const AppDataSource = new DataSource({
   type: "mysql",
   host: process.env.DB_HOST || "localhost",
-  port: 3306,
+  port: Number(process.env.DB_PORT) || 3306,
   username: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "password",
   database: process.env.DB_NAME || "test_db",
-  entities: [User,Post],
+  entities: [User, Post],
   synchronize: true,
 });
 
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 const initializeDatabase = async () => {
-  await wait(20000);
   try {
     await AppDataSource.initialize();
     console.log("Data Source has been initialized!");
@@ -31,14 +29,51 @@ const initializeDatabase = async () => {
   }
 };
 
+// Inicializar o banco de dados
 initializeDatabase();
 
+// Endpoint para criar um novo usuário
 app.post('/users', async (req, res) => {
-// Crie o endpoint de users
+  const { firstName, lastName, email } = req.body;
+
+  if (!firstName || !lastName || !email) {
+    return res.status(400).json({ error: "Todos os campos são obrigatórios." });
+  }
+
+  try {
+    const userRepository = AppDataSource.getRepository(User);
+    const newUser = userRepository.create({ firstName, lastName, email });
+    await userRepository.save(newUser);
+    res.status(201).json(newUser);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao criar o usuário." });
+  }
 });
 
+// Endpoint para criar um novo post
 app.post('/posts', async (req, res) => {
-// Crie o endpoint de posts
+  const { title, description, userId } = req.body;
+
+  if (!title || !description || !userId) {
+    return res.status(400).json({ error: "Todos os campos são obrigatórios." });
+  }
+
+  try {
+    const postRepository = AppDataSource.getRepository(Post);
+    const userRepository = AppDataSource.getRepository(User);
+
+    // Verifica se o usuário existe
+    const user = await userRepository.findOneBy({ id: userId });
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+
+    const newPost = postRepository.create({ title, description, userId });
+    await postRepository.save(newPost);
+    res.status(201).json(newPost);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao criar o post." });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
